@@ -1,68 +1,38 @@
-import express from 'express';
-import cors from 'cors';
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
-import qrcode from 'qrcode-terminal';
-
+const express = require('express');
+const qrcode = require('qrcode');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const app = express();
-app.use(cors());
-app.use(express.json());
+let qrCodeData = null;
+let isConnected = false;
 
-let messages = [];
-let sock;
-let GROUP_ID = null;
-
-app.get('/api/messages', (req, res) => {
-  res.json(messages.slice(-100));
+app.get('/', (req,res) => {
+  if(isConnected) res.send('<h1>Bot pont en ligne ! ✅ Connecté à WhatsApp</h1><a href="/qr">Voir QR</a>');
+  else if(qrCodeData) res.send(`<h1>Scanne ce QR avec WhatsApp</h1><img src="${qrCodeData}"><br><p>Va sur WhatsApp > Appareils connectés > Connecter un appareil</p><script>setTimeout(()=>location.reload(),5000)</script>`);
+  else res.send('<h1>Bot pont en ligne ! Démarrage...</h1><p>Attends 10 sec et actualise</p><script>setTimeout(()=>location.reload(),5000)</script>');
 });
 
-app.post('/api/message', async (req, res) => {
-  const { pseudo, texte } = req.body;
-  if(!texte) return res.status(400).json({error: "vide"});
-  const msgObj = { pseudo: pseudo || "anonyme", texte, source: "site", date: new Date() };
-  messages.push(msgObj);
-  if(sock && GROUP_ID){
-    await sock.sendMessage(GROUP_ID, { text: `[${msgObj.pseudo} via site]: ${msgObj.texte}` });
-  }
-  res.json({ ok: true });
+app.get('/qr', (req,res) => {
+  if(qrCodeData) res.send(`<img src="${qrCodeData}" style="width:300px"><script>setTimeout(()=>location.reload(),3000)</script>`);
+  else res.send('Pas de QR pour le moment, actualise dans 5s');
 });
-
-app.get('/api/groups', async (req, res) => {
-  if(!sock) return res.json({error: "bot pas connecté"});
-  const groups = await sock.groupFetchAllParticipating();
-  const list = Object.values(groups).map(g => ({ id: g.id, name: g.subject }));
-  res.json(list);
-});
-
-app.get('/', (req,res) => res.send('Bot pont en ligne!'));
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth');
-  sock = makeWASocket({ auth: state, printQRInTerminal: false });
+  const sock = makeWASocket({ auth: state, printQRInTerminal: true });
   sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', (update) => {
+  sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
-    if(qr){
-      console.log("SCANNE CE QR CODE");
-      qrcode.generate(qr, { small: true });
+    if(qr) {
+      qrCodeData = await qrcode.toDataURL(qr);
+      console.log('QR généré');
     }
-    if(connection === 'close'){
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut;
+    if(connection === 'open') { isConnected = true; qrCodeData = null; console.log('Connecté !'); }
+    if(connection === 'close') {
+      isConnected = false;
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       if(shouldReconnect) startBot();
-    } else if(connection === 'open'){
-      console.log("Bot connecté!");
-    }
-  });
-  sock.ev.on('messages.upsert', async (m) => {
-    const msg = m.messages[0];
-    if(!msg.message || msg.key.fromMe) return;
-    const from = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
-    if(!GROUP_ID && from.endsWith('@g.us')) GROUP_ID = from;
-    if(from === GROUP_ID){
-      messages.push({ pseudo: msg.pushName || "whatsapp", texte: text, source: "whatsapp", date: new Date() });
     }
   });
 }
 startBot();
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Serveur sur port", PORT));
+app.listen(3000, () => console.log('Serveur sur port 3000'));
