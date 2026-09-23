@@ -1,0 +1,10 @@
+{
+  "name": "pont-sajed",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "@whiskeysockets/baileys": "^6.7.8",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
