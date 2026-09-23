@@ -1,9 +1,12 @@
 {
   "name": "pont-sajed",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "@whiskeysockets/baileys": "^6.7.8",
-    "qrcode-terminal": "^0.12.0"
+    "@whiskeysockets/baileys": "^6.7.0",
+    "qrcode": "^1.5.3",
+    "pino": "^8.16.0"
   }
 }
